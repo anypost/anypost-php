@@ -1,0 +1,49 @@
+{
+    "name": "anypost/anypost-php",
+    "description": "Official PHP SDK for the Anypost email API.",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://anypost.com",
+    "keywords": [
+        "anypost",
+        "email",
+        "transactional-email",
+        "smtp",
+        "api"
+    ],
+    "support": {
+        "issues": "https://github.com/anypost/anypost-php/issues",
+        "source": "https://github.com/anypost/anypost-php"
+    },
+    "require": {
+        "php": "^8.1",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "^7.5"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^2.1",
+        "laravel/pint": "^1.16"
+    },
+    "autoload": {
+        "psr-4": {
+            "Anypost\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Anypost\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "stan": "phpstan analyse",
+        "lint": "pint --test",
+        "format": "pint"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

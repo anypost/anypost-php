@@ -1,0 +1,38 @@
+name: Release
+
+# Publishing to Packagist is pull-based: once the package is registered and the
+# Packagist GitHub integration (App or service hook) is enabled, Packagist syncs
+# every pushed `v*` tag automatically — no token-based publish step is needed.
+#
+# This workflow cuts the GitHub Release for the tag and, if PACKAGIST_USERNAME
+# and PACKAGIST_TOKEN secrets are set, nudges Packagist to update immediately
+# instead of waiting for its next crawl.
+#
+# To release: bump Version::VERSION in src/Version.php, tag the commit `vX.Y.Z`,
+# and push the tag.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+      PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes
+      - name: Notify Packagist
+        if: ${{ env.PACKAGIST_TOKEN != '' }}
+        run: |
+          curl -sf -XPOST -H 'content-type:application/json' \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
+            -d '{"repository":{"url":"https://github.com/anypost/anypost-php"}}'
