@@ -140,4 +140,23 @@ final class ResourcesTest extends TestCase
         $this->assertSame('email.delivered', $query['event_type']);
         $this->assertSame('welcome,onboarding', $query['tags']);
     }
+
+    public function test_events_expose_bot_on_proxied_open(): void
+    {
+        $client = $this->client([
+            $this->json(['data' => [
+                ['id' => 'evt_bot', 'type' => 'email.opened', 'tracking' => ['bot' => ['source' => 'google', 'kind' => 'proxy']]],
+                ['id' => 'evt_human', 'type' => 'email.opened', 'tracking' => null],
+            ], 'has_more' => false, 'next_cursor' => null]),
+        ]);
+
+        $page = $client->events->list(['event_type' => 'email.opened']);
+
+        // The nested bot object is wrapped as a Response and reachable via both
+        // property and array access.
+        $this->assertSame('google', $page->data[0]->tracking->bot->source);
+        $this->assertSame('proxy', $page->data[0]['tracking']['bot']['kind']);
+        // A human open carries no bot classification.
+        $this->assertNull($page->data[1]->tracking);
+    }
 }
