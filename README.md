@@ -4,6 +4,8 @@ The official PHP client for the [Anypost](https://anypost.com) email API.
 
 Requires PHP 8.1+. Built on [Guzzle](https://docs.guzzlephp.org/).
 
+This README covers the SDK itself: installation, idioms, and configuration. For platform concepts and the full field-level API reference, see the [Anypost documentation](https://anypost.com/docs).
+
 ## Install
 
 ```bash
@@ -18,10 +20,10 @@ use Anypost\Anypost;
 $client = new Anypost('ap_your_api_key');
 
 $email = $client->email->send([
-    'from' => 'Acme <you@yourdomain.com>',
-    'to' => ['someone@example.com'],
-    'subject' => 'Hello from Anypost',
-    'html' => '<p>It worked.</p>',
+    'from' => 'YourCo <you@yourdomain.com>',
+    'to' => ['you@example.com'],
+    'subject' => 'Welcome to Anypost',
+    'html' => '<p>Hello, inbox!</p>',
 ]);
 
 echo $email->id;
@@ -43,7 +45,7 @@ One of `text`, `html`, or `template_id` is required. All recipients in `to`, `cc
 
 ```php
 $client->email->send([
-    'from' => 'Acme <you@yourdomain.com>',
+    'from' => 'YourCo <you@yourdomain.com>',
     'to' => ['a@example.com', 'b@example.com'],
     'cc' => ['team@example.com'],
     'reply_to' => 'support@yourdomain.com',
@@ -54,11 +56,11 @@ $client->email->send([
 ]);
 ```
 
-Attachment `content` is the raw file bytes — pass what `file_get_contents` returns and the client base64-encodes it. Do not pre-encode it. The request body is capped at 5 MB.
+Attachment `content` is the raw file bytes: pass what `file_get_contents` returns and the client base64-encodes it. Do not pre-encode it. The request body is capped at 5 MB.
 
 ```php
 $client->email->send([
-    'from' => 'you@yourdomain.com',
+    'from' => 'YourCo <you@yourdomain.com>',
     'to' => ['someone@example.com'],
     'subject' => 'Your report',
     'text' => 'Attached.',
@@ -72,12 +74,14 @@ Send with a published template and per-recipient variables:
 
 ```php
 $client->email->send([
-    'from' => 'you@yourdomain.com',
+    'from' => 'YourCo <you@yourdomain.com>',
     'to' => ['someone@example.com'],
     'template_id' => 'template_018f2c5e-3a40-7a91-9c25-3a0b1d5e6f78',
     'variables' => ['name' => 'Ada', 'plan' => 'pro'],
 ]);
 ```
+
+See the [send reference](https://anypost.com/docs/reference/emails) for the complete field list.
 
 ## Batch
 
@@ -85,7 +89,7 @@ Send 1 to 100 independent messages in one request. `defaults` fills any field an
 
 ```php
 $result = $client->email->sendBatch([
-    'defaults' => ['from' => 'you@yourdomain.com'],
+    'defaults' => ['from' => 'YourCo <you@yourdomain.com>'],
     'emails' => [
         ['to' => ['a@example.com'], 'subject' => 'Hi A', 'text' => '...'],
         ['to' => ['b@example.com'], 'subject' => 'Hi B', 'text' => '...'],
@@ -109,7 +113,7 @@ foreach ($result->data as $entry) {
 
 ## Domains
 
-Manage sending domains under `$client->domains`. Add a domain, publish the CNAMEs it returns, then verify.
+Manage sending domains under `$client->domains`. Add a domain, publish the DNS records it returns, then verify.
 
 ```php
 $domain = $client->domains->create(['name' => 'example.com']);
@@ -117,29 +121,19 @@ $domain = $client->domains->create(['name' => 'example.com']);
 foreach ($domain->dns_records as $record) {
     echo "{$record->type} {$record->name} -> {$record->value}\n";
 }
-```
 
-`verify` always returns the current domain — a still-`pending` domain does not throw. Read `status` and `verification_failure`, and poll while DNS propagates.
-
-```php
 $checked = $client->domains->verify($domain->id);
 if ($checked->status !== 'verified') {
+    // verify returns the current domain even while pending; it does not throw
     echo $checked->verification_failure;
 }
 ```
 
-`get`, `update` (tracking config only), and `delete` round out the resource:
-
-```php
-$client->domains->update($domain->id, [
-    'tracking' => ['opens_enabled' => true, 'clicks_enabled' => true, 'subdomain' => 'track'],
-]);
-$client->domains->delete($domain->id);
-```
+`get`, `update` (tracking config only), and `delete` round out the resource. See [Domains](https://anypost.com/docs/reference/domains) for the verification lifecycle and field reference.
 
 ## API keys
 
-Manage keys under `$client->apiKeys`. The plaintext secret comes back only once, on `create`, as `key`:
+Manage keys under `$client->apiKeys`. The plaintext secret comes back only once, on `create`, as `key`, so store it then.
 
 ```php
 $created = $client->apiKeys->create([
@@ -147,13 +141,10 @@ $created = $client->apiKeys->create([
     'permissions' => 'send_only',
     'allowed_domains' => ['example.com'],
 ]);
-echo $created->key; // store now; never retrievable again
-
-$client->apiKeys->update($created->id, ['name' => 'Production server', 'permissions' => 'full']);
-$client->apiKeys->delete($created->id);
+echo $created->key; // never retrievable again
 ```
 
-`get` returns metadata only — `key_prefix`, never the secret. Permission and restriction changes take up to 5 minutes to propagate through the gateway cache.
+`get` returns metadata only (`key_prefix`, never the secret); `update` and `delete` round out the resource. See [API keys](https://anypost.com/docs/reference/api-keys) for the permission model and cache propagation.
 
 ## Templates
 
@@ -166,18 +157,14 @@ $template = $client->templates->create([
     'html' => '<h1>Welcome, {{ name }}</h1>',
 ]);
 
-$client->templates->updateDraft($template->id, [
-    'subject' => 'Welcome to Acme',
-    'html' => '<h1>Welcome, {{ name }}</h1>',
-]);
 $client->templates->publish($template->id);
 ```
 
-`kind` is `html` or `markdown` and is immutable once set. The plain-text body is always derived server-side. `getDraft`, `deleteDraft`, `duplicate`, `get`, `update` (name only), and `delete` round out the resource. Send with a published template via `template_id` (see [Sending](#sending)).
+`kind` (`html` or `markdown`) is immutable once set; the plain-text body is always derived server-side. `getDraft`, `updateDraft`, `deleteDraft`, `duplicate`, `get`, `update` (name only), and `delete` round out the resource. Send a published template with `template_id` (see [Sending](#sending)). See [Templates](https://anypost.com/docs/reference/templates) for the full model.
 
 ## Suppressions
 
-A suppression blocks sends to an address, scoped to a `topic`. The wildcard `*` blocks every topic; a specific topic (e.g. `marketing`) leaves transactional traffic untouched. Bounces and complaints write `*` automatically.
+A suppression blocks sends to an address, scoped to a `topic`. The wildcard `*` blocks every topic; a named topic (e.g. `marketing`) leaves transactional traffic untouched.
 
 ```php
 $client->suppressions->create([
@@ -186,17 +173,10 @@ $client->suppressions->create([
     'note' => 'Customer requested removal',
 ]);
 
-$row = $client->suppressions->get('alice@example.com', '*');
 $client->suppressions->delete('alice@example.com', 'marketing');
 ```
 
-`list` accepts `email_contains`, `topic`, `reason`, and `origin` filters. `listForEmail` returns every row for an address across all topics; `deleteForEmail` removes them all.
-
-```php
-foreach ($client->suppressions->list(['reason' => 'complaint']) as $s) {
-    echo "{$s->email} {$s->topic} {$s->suppressed_at}\n";
-}
-```
+`get`, `list` (with `email_contains`, `topic`, `reason`, and `origin` filters), `listForEmail`, and `deleteForEmail` round out the resource. See [Suppressions](https://anypost.com/docs/reference/suppressions) for scoping and the automatic-suppression rules for bounces and complaints.
 
 ## Webhooks
 
@@ -211,20 +191,11 @@ $webhook = $client->webhooks->create([
 echo $webhook->signing_secret; // store now; never retrievable again
 ```
 
-`update` sets the name, URL, events, and `status` together — set `status` to `"disabled"` to pause delivery, `"active"` to resume. `test` sends one synthetic `webhook.test` event and returns the outcome even when the endpoint fails. `rotateSecret` issues a new secret and keeps the previous one valid for a 24-hour grace window; `get`, `list`, and `delete` round out the resource.
-
-```php
-$result = $client->webhooks->test($webhook->id);
-if (! $result->delivered) {
-    echo "{$result->status_code} {$result->error}\n";
-}
-
-$rotated = $client->webhooks->rotateSecret($webhook->id);
-```
+`update`, `test`, `rotateSecret`, `get`, `list`, and `delete` round out the resource. See [Webhooks](https://anypost.com/docs/reference/webhooks) for the event catalog, status transitions, and the secret-rotation grace window.
 
 ### Verifying deliveries
 
-`WebhookSignature::verify` is static — it needs the signing secret, not an API key, so call it in your handler without a client. Pass the **raw** request body (the exact bytes, before JSON parsing), the `Anypost-Signature` header, and the secret. It returns on success and throws `WebhookVerificationException` otherwise. `WebhookSignature::unwrap` does the same and returns the parsed delivery as a `Response`.
+`WebhookSignature::verify` is static: it needs the signing secret, not an API key, so call it in your handler without a client. Pass the **raw** request body (the exact bytes, before JSON parsing), the `Anypost-Signature` header, and the secret. It returns on success and throws `WebhookVerificationException` otherwise. `WebhookSignature::unwrap` does the same and returns the parsed delivery as a `Response`.
 
 ```php
 use Anypost\Webhook\WebhookSignature;
@@ -260,11 +231,11 @@ foreach (json_decode($raw, true)['events'] as $event) {
 }
 ```
 
-Deliveries older than five minutes are rejected by default to bound replay; pass a fourth argument to widen, narrow, or disable (`0`) that check. During a secret rotation the header carries a `v1=` component per active secret, and a match on any one passes — so deliveries keep verifying while you redeploy.
+Deliveries older than five minutes are rejected by default to bound replay; pass a fourth argument to widen, narrow, or disable (`0`) that check. During a secret rotation the header carries a `v1=` component per active secret, and a match on any one passes, so deliveries keep verifying while you redeploy.
 
 ## Events
 
-`$client->events->list` pages the team's event stream, newest-first. The window defaults to the last 24 hours and is clamped to your plan's retention. Events are read-only and not addressable by id — there is no `get`.
+`$client->events->list` pages the team's event stream, newest-first. The window defaults to the last 24 hours and is clamped to your plan's retention. Events are read-only and not addressable by id, so there is no `get`.
 
 ```php
 foreach ($client->events->list(['event_type' => 'email.bounced']) as $event) {
@@ -272,19 +243,11 @@ foreach ($client->events->list(['event_type' => 'email.bounced']) as $event) {
 }
 ```
 
-Filter by `start`, `end`, `event_type`, `recipient`, `email_id`, `message_id`, `domain`, `topic`, `campaign`, `template_id`, and `tags`. All filters are exact-match, except `tags`, which takes an array and matches an event carrying *any* of the given tags. A filter value that matches no row returns an empty page. This is also how you backfill the gap after a webhook endpoint was disabled — page the events that occurred during the outage once it's healthy.
-
-```php
-// Events tagged "onboarding" OR "welcome", that also bounced.
-$page = $client->events->list([
-    'tags' => ['onboarding', 'welcome'],
-    'event_type' => 'email.bounced',
-]);
-```
+Filter by `start`, `end`, `event_type`, `recipient`, `email_id`, `message_id`, `domain`, `topic`, `campaign`, `template_id`, and `tags`, an array that matches an event carrying *any* of the given tags. Every other filter is exact-match. This is also how you backfill the gap after a webhook endpoint was disabled: page the events that occurred during the outage once it's healthy. See [Events](https://anypost.com/docs/reference/events) for the field reference.
 
 ## Pagination
 
-List endpoints return a `Page`. Read one page directly, or iterate it to walk every page — the client fetches each one as needed.
+List endpoints return a `Page`. Read one page directly, or iterate it to walk every page; the client fetches each one as needed.
 
 ```php
 $page = $client->domains->list(['limit' => 50]);
@@ -323,7 +286,7 @@ try {
 | `AuthenticationException` | `authentication_error` | `401` |
 | `PermissionException` | `permission_error` | `403` |
 | `NotFoundException` | `not_found` | `404` |
-| `ConflictException` | `idempotency_concurrent`, `webhook_rotation_in_progress` | `409` |
+| `ConflictException` | `conflict`, `idempotency_concurrent`, `webhook_rotation_in_progress` | `409` |
 | `IdempotencyMismatchException` | `idempotency_mismatch` | `422` |
 | `RateLimitException` | `rate_limit_exceeded` | `429` |
 | `PayloadTooLargeException` | `payload_too_large` | `413` |
