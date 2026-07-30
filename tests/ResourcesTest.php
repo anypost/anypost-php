@@ -141,6 +141,18 @@ final class ResourcesTest extends TestCase
         $this->assertSame('welcome,onboarding', $query['tags']);
     }
 
+    public function test_events_thread_ip_pool_into_the_query(): void
+    {
+        $client = $this->client([
+            $this->json(['data' => [], 'has_more' => false, 'next_cursor' => null]),
+        ]);
+
+        $client->events->list(['ip_pool' => 'marketing']);
+
+        parse_str($this->lastRequest()->getUri()->getQuery(), $query);
+        $this->assertSame('marketing', $query['ip_pool']);
+    }
+
     public function test_events_expose_bot_on_proxied_open(): void
     {
         $client = $this->client([

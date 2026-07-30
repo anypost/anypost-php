@@ -17,7 +17,7 @@ final class Events extends AbstractResource
      * The window defaults to the last 24 hours and is clamped to the plan's
      * retention. Filter with `start`, `end`, `event_type`, `recipient`,
      * `email_id`, `message_id`, `domain`, `topic`, `campaign`, `template_id`,
-     * and `tags` (a list, matched with hasAny).
+     * `ip_pool`, and `tags` (a list, matched with hasAny).
      *
      * @param array<string, mixed> $params
      */
@@ -47,6 +47,11 @@ final class Events extends AbstractResource
                 'topic' => $params['topic'] ?? null,
                 'campaign' => $params['campaign'] ?? null,
                 'template_id' => $params['template_id'] ?? null,
+                // Exact match against the [a-z0-9]([a-z0-9-]*[a-z0-9])?
+                // pool-name shape. A value outside it returns an empty list
+                // rather than being ignored, so a typo cannot silently widen
+                // the answer to "all pools".
+                'ip_pool' => $params['ip_pool'] ?? null,
                 // Sent comma-separated (tags=a,b); the API matches with hasAny.
                 'tags' => is_array($tags) && $tags !== [] ? implode(',', $tags) : null,
             ],
