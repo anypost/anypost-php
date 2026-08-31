@@ -80,6 +80,62 @@ final class EmailTest extends TestCase
         $this->assertSame('hello.txt', $body['attachments'][0]['filename']);
     }
 
+    public function test_send_passes_already_encoded_attachment_content_through(): void
+    {
+        $client = $this->client([$this->json(['id' => 'email_1', 'created_at' => 'now'], 202)]);
+        $alreadyEncoded = base64_encode('hello world');
+
+        $client->email->send([
+            'from' => 'a@b.com',
+            'to' => ['c@d.com'],
+            'subject' => 'With file',
+            'text' => 'see attached',
+            'attachments' => [
+                ['filename' => 'hello.txt', 'content_base64' => $alreadyEncoded, 'content_type' => 'text/plain'],
+            ],
+        ]);
+
+        $attachment = $this->bodyOf($this->lastRequest())['attachments'][0];
+        $this->assertSame($alreadyEncoded, $attachment['content']);
+        $this->assertSame('text/plain', $attachment['content_type']);
+        // The wire object carries only `content` — the input key does not leak out.
+        $this->assertArrayNotHasKey('content_base64', $attachment);
+    }
+
+    public function test_send_rejects_an_attachment_with_both_content_forms(): void
+    {
+        $client = $this->client([$this->json(['id' => 'email_1', 'created_at' => 'now'], 202)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches("/hello\\.txt.*exactly one/");
+
+        $client->email->send([
+            'from' => 'a@b.com',
+            'to' => ['c@d.com'],
+            'subject' => 'With file',
+            'text' => 'see attached',
+            'attachments' => [
+                ['filename' => 'hello.txt', 'content' => 'hello', 'content_base64' => 'aGVsbG8='],
+            ],
+        ]);
+    }
+
+    public function test_send_rejects_an_attachment_with_no_content(): void
+    {
+        $client = $this->client([$this->json(['id' => 'email_1', 'created_at' => 'now'], 202)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches("/empty\\.txt.*no content/");
+
+        $client->email->send([
+            'from' => 'a@b.com',
+            'to' => ['c@d.com'],
+            'subject' => 'With file',
+            'text' => 'see attached',
+            'attachments' => [['filename' => 'empty.txt']],
+        ]);
+    }
+
     public function test_send_batch_posts_all_emails_and_does_not_throw_on_207(): void
     {
         $client = $this->client([

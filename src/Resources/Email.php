@@ -6,12 +6,17 @@ namespace Anypost\Resources;
 
 use Anypost\Response;
 use Anypost\Util\Base64;
+use InvalidArgumentException;
 
 /**
  * Operations on the `/email` endpoints.
  *
- * Attachment `content` is the raw file bytes (e.g. from `file_get_contents`);
- * the SDK base64-encodes it for transport. Do not pre-encode it.
+ * Give each attachment its content exactly one of two ways: `content` for raw
+ * file bytes (e.g. from `file_get_contents`), which the SDK base64-encodes for
+ * transport, or `content_base64` for content that is already base64 at rest,
+ * which is sent through verbatim so nothing is decoded just to be re-encoded.
+ * PHP has no type-level distinction between the two — both are strings — so the
+ * key you choose is the signal.
  */
 final class Email extends AbstractResource
 {
@@ -62,8 +67,8 @@ final class Email extends AbstractResource
     }
 
     /**
-     * Return a copy of a message with each attachment's raw `content`
-     * base64-encoded for transport.
+     * Return a copy of a message with each attachment's content collapsed onto
+     * the single base64 `content` field the API takes.
      *
      * @param array<string, mixed> $message
      * @return array<string, mixed>
@@ -75,16 +80,44 @@ final class Email extends AbstractResource
         }
 
         $message['attachments'] = array_map(
-            function (array $attachment): array {
-                if (isset($attachment['content']) && is_string($attachment['content'])) {
-                    $attachment['content'] = Base64::encode($attachment['content']);
-                }
-
-                return $attachment;
-            },
+            fn (array $attachment): array => $this->encodeAttachment($attachment),
             $message['attachments'],
         );
 
         return $message;
+    }
+
+    /**
+     * @param array<string, mixed> $attachment
+     * @return array<string, mixed>
+     */
+    private function encodeAttachment(array $attachment): array
+    {
+        $raw = $attachment['content'] ?? null;
+        $encoded = $attachment['content_base64'] ?? null;
+        $name = var_export($attachment['filename'] ?? null, true);
+
+        if ($raw !== null && $encoded !== null) {
+            throw new InvalidArgumentException(
+                "Attachment {$name} sets both 'content' and 'content_base64'; set exactly one.",
+            );
+        }
+
+        if (is_string($encoded)) {
+            unset($attachment['content_base64']);
+            $attachment['content'] = $encoded;
+
+            return $attachment;
+        }
+
+        if (is_string($raw)) {
+            $attachment['content'] = Base64::encode($raw);
+
+            return $attachment;
+        }
+
+        throw new InvalidArgumentException(
+            "Attachment {$name} has no content; set 'content' (raw bytes) or 'content_base64'.",
+        );
     }
 }

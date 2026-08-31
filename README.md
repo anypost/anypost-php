@@ -56,7 +56,7 @@ $client->email->send([
 ]);
 ```
 
-Attachment `content` is the raw file bytes: pass what `file_get_contents` returns and the client base64-encodes it. Do not pre-encode it. The request body is capped at 5 MB.
+Attachment `content` is the raw file bytes: pass what `file_get_contents` returns and the client base64-encodes it. When the content is already base64 at rest, pass it as `content_base64` instead — that string is sent verbatim, so nothing is decoded just to be re-encoded. Set exactly one of the two. The request body is capped at 5 MB.
 
 ```php
 $client->email->send([
