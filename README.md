@@ -176,6 +176,20 @@ $client->suppressions->create([
 $client->suppressions->delete('alice@example.com', 'marketing');
 ```
 
+Add up to 1,000 at a time with `createBatch`:
+
+```php
+$result = $client->suppressions->createBatch([
+    ['email' => 'alice@example.com', 'topic' => 'marketing', 'reason' => 'hard bounce'],
+    ['email' => 'bob@example.com'],
+]);
+echo "{$result->imported} added, {$result->already_suppressed} already suppressed\n";
+```
+
+Existing entries are counted in `already_suppressed` and left unchanged, so a batch is safe to retry. Invalid addresses come back in `invalid` with their `index` instead of failing the batch.
+
+Suppressions do not expire; the `expires_at` field is always null, kept for compatibility, and will be removed in a future major version.
+
 `get`, `list` (with `email_contains`, `topic`, `reason`, and `origin` filters), `listForEmail`, and `deleteForEmail` round out the resource. See [Suppressions](https://anypost.com/docs/reference/suppressions) for scoping and the automatic-suppression rules for bounces and complaints.
 
 ## Webhooks

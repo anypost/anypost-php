@@ -13,7 +13,7 @@ use Anypost\Response;
 final class Suppressions extends AbstractResource
 {
     /**
-     * List the team's suppressions, newest-first. Expired rows are filtered out.
+     * List the team's suppressions, newest-first.
      *
      * Filter with `email_contains`, `topic`, `reason`, and `origin`.
      *
@@ -35,6 +35,26 @@ final class Suppressions extends AbstractResource
     public function create(array $params): Response
     {
         return $this->requestObject('POST', '/suppressions', ['body' => $params]);
+    }
+
+    /**
+     * Add up to 1,000 manual suppressions in one call.
+     *
+     * Each item takes `email` plus optional `topic` (default `*`), `reason`
+     * (free-form; common aliases such as `bounce` or `opt-out` are mapped, anything
+     * else records `manual`), and `note`. Addresses already suppressed for the topic
+     * are counted in `already_suppressed` and left unchanged, so a batch is safe to
+     * retry. Invalid addresses come back in `invalid` (with their 0-based `index`)
+     * instead of failing the batch. Throws `validation_error`, adding nothing, if the
+     * batch would pass the team's suppression limit.
+     *
+     * @param list<array{email: string, topic?: string, reason?: string, note?: string|null}> $suppressions
+     */
+    public function createBatch(array $suppressions): Response
+    {
+        return $this->requestObject('POST', '/suppressions/batch', [
+            'body' => ['suppressions' => $suppressions],
+        ]);
     }
 
     /**
