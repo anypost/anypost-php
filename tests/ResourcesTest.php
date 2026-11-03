@@ -128,6 +128,34 @@ final class ResourcesTest extends TestCase
         $this->assertSame('news', $rows[1]->topic);
     }
 
+    public function test_suppressions_create_batch_wraps_items_and_parses_the_result(): void
+    {
+        $client = $this->client([
+            $this->json([
+                'imported' => 1,
+                'already_suppressed' => 0,
+                'invalid' => [['index' => 1, 'email' => 'not-an-address']],
+            ]),
+        ]);
+
+        $result = $client->suppressions->createBatch([
+            ['email' => 'a@b.com', 'topic' => 'marketing', 'reason' => 'hard bounce'],
+            ['email' => 'not-an-address'],
+        ]);
+
+        $request = $this->lastRequest();
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertSame('/v1/suppressions/batch', $request->getUri()->getPath());
+        $this->assertSame(
+            '{"suppressions":[{"email":"a@b.com","topic":"marketing","reason":"hard bounce"},{"email":"not-an-address"}]}',
+            (string) $request->getBody(),
+        );
+        $this->assertSame(1, $result->imported);
+        $this->assertSame(0, $result->already_suppressed);
+        $this->assertSame(1, $result->invalid[0]->index);
+        $this->assertSame('not-an-address', $result->invalid[0]->email);
+    }
+
     public function test_events_join_tags_as_csv(): void
     {
         $client = $this->client([
